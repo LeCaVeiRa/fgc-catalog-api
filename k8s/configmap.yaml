@@ -5,6 +5,12 @@ metadata:
   labels:
     app: fgc-catalog-api
 data:
-  RabbitMq__Host: "rabbitmq"
+  # Endpoint AMQPS do Amazon MQ (saída BrokerAmqpEndpoint do template.yaml em
+  # fgc-notifications-lambda) - substitui o RabbitMq__Host="rabbitmq" usado no docker-compose local.
+  RabbitMq__Host: "fgc-notifications-broker.mq.us-east-1.amazonaws.com"
+  RabbitMq__Port: "5671"
+  RabbitMq__VirtualHost: "/"
+  RabbitMq__UseSsl: "true"
   Jwt__Issuer: "Fgc.UsersAPI"
   Jwt__Audience: "Fgc.CatalogAPI"
+  Redis__ConnectionString: "redis:6379"

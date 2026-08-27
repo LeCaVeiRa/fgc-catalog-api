@@ -1,4 +1,5 @@
-﻿using Fgc.MessageContracts.Events;
+﻿using Fgc.Catalog.Application.Interfaces;
+using Fgc.MessageContracts.Events;
 using MassTransit;
 using Microsoft.Extensions.Logging;
 
@@ -7,10 +8,12 @@ namespace Fgc.Catalog.Application.Consumers
     public class UserCreatedEventConsumer : IConsumer<UserCreatedEvent>
     {
         private readonly ILogger<UserCreatedEventConsumer> _logger;
+        private readonly IEventLogRepository _eventLogRepository;
 
-        public UserCreatedEventConsumer(ILogger<UserCreatedEventConsumer> logger)
+        public UserCreatedEventConsumer(ILogger<UserCreatedEventConsumer> logger, IEventLogRepository eventLogRepository)
         {
             _logger = logger;
+            _eventLogRepository = eventLogRepository;
         }
         public async Task Consume(ConsumeContext<UserCreatedEvent> context)
         {
@@ -23,9 +26,7 @@ namespace Fgc.Catalog.Application.Consumers
                 message.Email
                 );
 
-            // TODO: lógica de integração - criar catálogo do usuário, etc.
-
-            await Task.CompletedTask;
+            await _eventLogRepository.LogAsync("UserCreatedEvent", message, context.CancellationToken);
         }
     }
 }

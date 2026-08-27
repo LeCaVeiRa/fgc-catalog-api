@@ -13,6 +13,7 @@ namespace Fgc.Catalog.Tests.Consumers
         private readonly Mock<IUserLibraryRepository> _userLibraryRepoMock;
         private readonly Mock<IGameRepository> _gameRepoMock;
         private readonly Mock<ILogger<PaymentProcessedEventConsumer>> _loggerMock;
+        private readonly Mock<IEventLogRepository> _eventLogRepoMock;
         private readonly PaymentProcessedEventConsumer _consumer;
 
         public PaymentProcessedEventConsumerTests()
@@ -20,10 +21,12 @@ namespace Fgc.Catalog.Tests.Consumers
             _userLibraryRepoMock = new Mock<IUserLibraryRepository>();
             _gameRepoMock = new Mock<IGameRepository>();
             _loggerMock = new Mock<ILogger<PaymentProcessedEventConsumer>>();
+            _eventLogRepoMock = new Mock<IEventLogRepository>();
             _consumer = new PaymentProcessedEventConsumer(
                 _userLibraryRepoMock.Object,
                 _gameRepoMock.Object,
-                _loggerMock.Object);
+                _loggerMock.Object,
+                _eventLogRepoMock.Object);
         }
 
         [Fact]

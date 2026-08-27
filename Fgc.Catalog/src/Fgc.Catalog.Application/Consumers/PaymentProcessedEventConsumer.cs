@@ -7,9 +7,10 @@ using Microsoft.Extensions.Logging;
 namespace Fgc.Catalog.Application.Consumers
 {
     public class PaymentProcessedEventConsumer (
-        IUserLibraryRepository  userLibraryRepository, 
+        IUserLibraryRepository  userLibraryRepository,
         IGameRepository gameRepository,
-        ILogger<PaymentProcessedEventConsumer> logger 
+        ILogger<PaymentProcessedEventConsumer> logger,
+        IEventLogRepository eventLogRepository
     ) : IConsumer<PaymentProcessedEvent>
     {
         public async Task Consume(ConsumeContext<PaymentProcessedEvent> context)
@@ -20,6 +21,8 @@ namespace Fgc.Catalog.Application.Consumers
                 "PaymentProcessedEvent received: OrderId={OrderId}, Status={Status}",
                 message.OrderedId,
                 message.Status);
+
+            await eventLogRepository.LogAsync("PaymentProcessedEvent", message, context.CancellationToken);
 
             if (message.Status != "Approved")
             {
