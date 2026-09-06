@@ -24,6 +24,7 @@ builder.Services.AddDbContext<CatalogDbContext>(options =>
 // B. Injeção de Dependências (Repositories)
 builder.Services.AddScoped<IGameRepository, GameRepository>();
 builder.Services.AddScoped<IUserLibraryRepository, UserLibraryRepository>();
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
 // B2. DynamoDB (log de eventos cross-service)
 builder.Services.AddSingleton<IAmazonDynamoDB>(_ =>
@@ -55,6 +56,7 @@ builder.Services.AddStackExchangeRedisCache(options =>
 
 // C. Injeção de Dependências (Services)
 builder.Services.AddScoped<GameService>();
+builder.Services.AddScoped<OrderService>();
 // D. Autenticação JWT
 builder.Services.AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
@@ -168,6 +170,8 @@ using (var scope = app.Services.CreateScope())
 if (!string.IsNullOrEmpty(builder.Configuration["AWS:DynamoDB:ServiceUrl"]))
 {
     await DynamoDbEventLogTableInitializer.EnsureTableExistsAsync(
+        app.Services.GetRequiredService<IAmazonDynamoDB>());
+    await DynamoDbOrderTableInitializer.EnsureTableExistsAsync(
         app.Services.GetRequiredService<IAmazonDynamoDB>());
 }
 app.Run();

@@ -19,5 +19,9 @@ public sealed class GameConfiguration : IEntityTypeConfiguration<Game>
         builder.Property(g => g.Category)
             .IsRequired()
             .HasMaxLength(100);
+
+        builder.Property(g => g.Price)
+            .IsRequired()
+            .HasColumnType("decimal(18,2)");
     }
 }

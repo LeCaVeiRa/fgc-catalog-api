@@ -29,7 +29,7 @@ namespace Fgc.Catalog.Application.Services
             if (await _repository.ExistsByTitleAsync(request.Title))
                 throw new CatalogDomainException("Game already exists.");
 
-            var game = Game.Create(request.Title, request.Category);
+            var game = Game.Create(request.Title, request.Category, request.Price);
 
             await _repository.AddAsync(game);
 
@@ -65,7 +65,7 @@ namespace Fgc.Catalog.Application.Services
             var game = await _repository.GetByIdAsync(id)
                 ?? throw new NotFoundException("Game not found.");
 
-            game.Update(request.Title, request.Category);
+            game.Update(request.Title, request.Category, request.Price);
 
             await _repository.UpdateAsync(game);
 
