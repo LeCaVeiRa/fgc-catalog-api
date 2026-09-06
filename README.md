@@ -196,4 +196,3 @@ Manifestos em `k8s/` (`deployment.yaml`, `service.yaml`, `configmap.yaml`, `secr
 **Integrantes**
 
 * Yan Santos Wendt
-* Ronnam de Lima da Silva
