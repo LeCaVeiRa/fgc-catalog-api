@@ -20,7 +20,7 @@ builder.Services.AddSwaggerGen();
 // ============================================================
 // A. Banco de Dados (Entity Framework Core)
 builder.Services.AddDbContext<CatalogDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("CatalogDb"))
+    options.UseNpgsql(builder.Configuration.GetConnectionString("CatalogDb"))
 );
 // B. Injeção de Dependências (Repositories)
 builder.Services.AddScoped<IGameRepository, GameRepository>();
@@ -167,7 +167,16 @@ app.MapFgcHealthChecks();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
-    context.Database.EnsureCreated();
+    // Testes de integração usam InMemory (sem migrations). Banco relacional: aplica migrations na subida,
+    // exceto quando Database:MigrateOnStartup=false (EKS - um Job aplica antes do rollout, evitando corrida entre réplicas).
+    if (!context.Database.IsRelational())
+    {
+        context.Database.EnsureCreated();
+    }
+    else if (builder.Configuration.GetValue("Database:MigrateOnStartup", true))
+    {
+        await context.Database.MigrateAsync();
+    }
 }
 // Só cria a tabela automaticamente contra um endpoint local (dynamodb-local) - nem em produção
 // (isso é responsabilidade do IaC) nem contra a AWS real por engano em testes/dev sem Docker.
