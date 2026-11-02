@@ -1,8 +1,10 @@
 ﻿using Fgc.Catalog.Application.DTOS.Games;
+using Fgc.Catalog.Application.Helpers;
 using Fgc.Catalog.Application.Interfaces;
 using Fgc.Catalog.Domain.Entities;
 using Fgc.Catalog.Domain.Exceptions;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 namespace Fgc.Catalog.Application.Services
@@ -17,11 +19,13 @@ namespace Fgc.Catalog.Application.Services
 
         private readonly IGameRepository _repository;
         private readonly IDistributedCache _cache;
+        private readonly ILogger<GameService> _logger;
 
-        public GameService(IGameRepository repository, IDistributedCache cache)
+        public GameService(IGameRepository repository, IDistributedCache cache, ILogger<GameService> logger)
         {
             _repository = repository;
             _cache = cache;
+            _logger = logger;
         }
 
         public async Task<GameResponse> CreateAsync(GameRequest request)
@@ -33,14 +37,14 @@ namespace Fgc.Catalog.Application.Services
 
             await _repository.AddAsync(game);
 
-            await _cache.RemoveAsync(AllGamesCacheKey);
+            await _cache.TryRemoveAsync(AllGamesCacheKey, _logger);
 
             return GameResponse.FromEntity(game);
         }
 
         public async Task<List<GameResponse>> GetAllAsync()
         {
-            var cached = await _cache.GetStringAsync(AllGamesCacheKey);
+            var cached = await _cache.TryGetStringAsync(AllGamesCacheKey, _logger);
             if (cached is not null)
             {
                 return JsonSerializer.Deserialize<List<GameResponse>>(cached) ?? [];
@@ -49,7 +53,7 @@ namespace Fgc.Catalog.Application.Services
             var games = await _repository.GetAllAsync();
             var response = games.Select(GameResponse.FromEntity).ToList();
 
-            await _cache.SetStringAsync(AllGamesCacheKey, JsonSerializer.Serialize(response), CacheOptions);
+            await _cache.TrySetStringAsync(AllGamesCacheKey, JsonSerializer.Serialize(response), CacheOptions, _logger);
 
             return response;
         }
@@ -69,7 +73,7 @@ namespace Fgc.Catalog.Application.Services
 
             await _repository.UpdateAsync(game);
 
-            await _cache.RemoveAsync(AllGamesCacheKey);
+            await _cache.TryRemoveAsync(AllGamesCacheKey, _logger);
 
             return GameResponse.FromEntity(game);
         }
@@ -80,7 +84,7 @@ namespace Fgc.Catalog.Application.Services
                 ?? throw new NotFoundException("Game not found.");
             await _repository.DeleteAsync(game);
 
-            await _cache.RemoveAsync(AllGamesCacheKey);
+            await _cache.TryRemoveAsync(AllGamesCacheKey, _logger);
         }
     }
 }

@@ -1,4 +1,5 @@
 using Amazon.DynamoDBv2;
+using Fgc.Catalog.Api.HealthChecks;
 using Fgc.Catalog.Application.Consumers;
 using Fgc.Catalog.Application.Interfaces;
 using Fgc.Catalog.Application.Services;
@@ -53,6 +54,9 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = builder.Configuration["Redis:ConnectionString"];
     options.InstanceName = "FgcCatalog:";
 });
+
+// B4. Health checks (liveness/readiness)
+builder.Services.AddFgcHealthChecks("FgcEventLog", "Orders");
 
 // C. Injeção de Dependências (Services)
 builder.Services.AddScoped<GameService>();
@@ -159,7 +163,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapMetrics();
-app.MapGet("/health", () => Results.Ok());
+app.MapFgcHealthChecks();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();

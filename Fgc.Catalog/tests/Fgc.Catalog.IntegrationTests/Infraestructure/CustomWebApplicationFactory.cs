@@ -1,6 +1,8 @@
-﻿using Fgc.Catalog.Application.Interfaces;
+﻿using Fgc.Catalog.Application.Consumers;
+using Fgc.Catalog.Application.Interfaces;
 using Fgc.Catalog.Domain.Entities;
 using Fgc.Catalog.Infrastructure.Persistence;
+using MassTransit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -44,6 +46,14 @@ namespace Fgc.Catalog.IntegrationTests.Infrastructure
                 // Sem DynamoDB real disponível em teste de integração - fake em memória equivalente.
                 services.RemoveAll(typeof(IOrderRepository));
                 services.AddSingleton<IOrderRepository, InMemoryOrderRepository>();
+
+                // Sem RabbitMQ real disponível em teste de integração - substitui o bus do Program
+                // por um transporte em memória (publicações ficam inspecionáveis via ITestHarness).
+                services.AddMassTransitTestHarness(x =>
+                {
+                    x.AddConsumer<UserCreatedEventConsumer>();
+                    x.AddConsumer<PaymentProcessedEventConsumer>();
+                });
             });
 
         }

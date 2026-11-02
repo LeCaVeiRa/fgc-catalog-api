@@ -19,21 +19,28 @@ namespace Fgc.Catalog.Infrastructure.Persistence
                 // tabela ainda não existe, cria abaixo
             }
 
-            await dynamoDb.CreateTableAsync(new CreateTableRequest
+            try
             {
-                TableName = TableName,
-                BillingMode = BillingMode.PAY_PER_REQUEST,
-                AttributeDefinitions =
-                [
-                    new AttributeDefinition("ServiceName", ScalarAttributeType.S),
-                    new AttributeDefinition("OccurredAtId", ScalarAttributeType.S)
-                ],
-                KeySchema =
-                [
-                    new KeySchemaElement("ServiceName", KeyType.HASH),
-                    new KeySchemaElement("OccurredAtId", KeyType.RANGE)
-                ]
-            });
+                await dynamoDb.CreateTableAsync(new CreateTableRequest
+                {
+                    TableName = TableName,
+                    BillingMode = BillingMode.PAY_PER_REQUEST,
+                    AttributeDefinitions =
+                    [
+                        new AttributeDefinition("ServiceName", ScalarAttributeType.S),
+                        new AttributeDefinition("OccurredAtId", ScalarAttributeType.S)
+                    ],
+                    KeySchema =
+                    [
+                        new KeySchemaElement("ServiceName", KeyType.HASH),
+                        new KeySchemaElement("OccurredAtId", KeyType.RANGE)
+                    ]
+                });
+            }
+            catch (ResourceInUseException)
+            {
+                // outra instância (ou outro serviço) criou a tabela entre o Describe e o Create
+            }
         }
     }
 }
