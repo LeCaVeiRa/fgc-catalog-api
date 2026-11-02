@@ -40,6 +40,19 @@ namespace Fgc.Catalog.Tests.Services
         }
 
         [Fact]
+        public async Task GetAllAsync_ShouldSkipCache_AfterFailure()
+        {
+            _repositoryMock.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
+
+            await _gameService.GetAllAsync();
+            await _gameService.GetAllAsync();
+
+            // Primeira chamada falha e abre o disjuntor; a segunda nem tenta o Redis.
+            _cacheMock.Verify(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+            _repositoryMock.Verify(r => r.GetAllAsync(), Times.Exactly(2));
+        }
+
+        [Fact]
         public async Task CreateAsync_ShouldPersist_WhenCacheInvalidationFails()
         {
             _repositoryMock.Setup(r => r.ExistsByTitleAsync("Zelda")).ReturnsAsync(false);

@@ -57,9 +57,10 @@ builder.Services.AddSingleton<IAmazonDynamoDB>(_ =>
 builder.Services.AddScoped<IEventLogRepository, DynamoDbEventLogRepository>();
 
 // B3. Redis (cache de GET /games)
+var redisConnectionString = RequiredSetting("Redis:ConnectionString");
 builder.Services.AddStackExchangeRedisCache(options =>
 {
-    options.Configuration = builder.Configuration["Redis:ConnectionString"];
+    options.Configuration = redisConnectionString;
     options.InstanceName = "FgcCatalog:";
 });
 
@@ -73,6 +74,8 @@ builder.Services.AddFgcHealthChecks("FgcEventLog", "Orders");
 builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<OrderService>();
 // D. Autenticação JWT
+// Lida aqui (e não dentro do callback) para falhar na subida, não na primeira requisição autenticada.
+var jwtKey = RequiredSetting("Jwt:Key");
 builder.Services.AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
     {
@@ -85,7 +88,7 @@ builder.Services.AddAuthentication("Bearer")
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                System.Text.Encoding.UTF8.GetBytes(RequiredSetting("Jwt:Key"))
+                System.Text.Encoding.UTF8.GetBytes(jwtKey)
             )
         };
     });
@@ -159,13 +162,27 @@ builder.Services.AddMassTransit(x =>
 });
 // ============================================================
 var app = builder.Build();
+
+// Modo Job (EKS, antes do rollout): aplica migrations e encerra sem subir o servidor HTTP -
+// evita corrida de migrations entre réplicas.
+if (args.Contains("--migrate"))
+{
+    using var migrateScope = app.Services.CreateScope();
+    await migrateScope.ServiceProvider.GetRequiredService<CatalogDbContext>().Database.MigrateAsync();
+    app.Logger.LogInformation("Migrations applied; exiting (--migrate)");
+    return;
+}
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-app.UseHttpsRedirection();
+// TLS termina no ALB/Kong; o container só escuta HTTP:8080. Redirect só quando explicitamente pedido.
+if (app.Configuration.GetValue<bool>("Https:Redirect"))
+{
+    app.UseHttpsRedirection();
+}
 app.UseHttpMetrics();
 // ============================================================
 // 2. MIDDLEWARES DE SEGURANÇA
