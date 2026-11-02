@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.103.5" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="OpenSearch.Client" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>

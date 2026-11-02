@@ -306,5 +306,42 @@ namespace Fgc.Catalog.IntegrationTests.Controllers
             // Assert
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
+
+        [Theory]
+        [InlineData("/games/search?q=zelda")]
+        [InlineData("/search?q=zelda")]
+        public async Task SearchGames_AfterCreate_ReturnsIndexedGame(string url)
+        {
+            // Arrange
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", GenerateAdminToken());
+            var title = $"Zelda {Guid.NewGuid():N}";
+            await _client.PostAsJsonAsync("/games", new GameRequest { Title = title, Category = "Aventura", Price = 99m });
+
+            // Act
+            var response = await _client.GetAsync(url);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var games = await response.Content.ReadFromJsonAsync<List<GameResponse>>();
+            Assert.Contains(games!, g => g.Title == title);
+        }
+
+        [Fact]
+        public async Task SearchGames_WithoutQuery_Returns400()
+        {
+            var response = await _client.GetAsync("/games/search");
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Reindex_WithoutToken_Returns401()
+        {
+            _client.DefaultRequestHeaders.Authorization = null;
+
+            var response = await _client.PostAsync("/games/reindex", null);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
     }
 }

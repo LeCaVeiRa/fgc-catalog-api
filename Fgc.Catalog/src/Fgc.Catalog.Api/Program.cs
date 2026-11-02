@@ -5,6 +5,7 @@ using Fgc.Catalog.Application.Interfaces;
 using Fgc.Catalog.Application.Services;
 using Fgc.Catalog.Infrastructure.Persistence;
 using Fgc.Catalog.Infrastructure.Repositories;
+using Fgc.Catalog.Infrastructure.Search;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -54,6 +55,9 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = builder.Configuration["Redis:ConnectionString"];
     options.InstanceName = "FgcCatalog:";
 });
+
+// B3b. OpenSearch (busca de jogos)
+builder.Services.AddOpenSearchGameSearch(builder.Configuration);
 
 // B4. Health checks (liveness/readiness)
 builder.Services.AddFgcHealthChecks("FgcEventLog", "Orders");
@@ -186,6 +190,10 @@ if (!string.IsNullOrEmpty(builder.Configuration["AWS:DynamoDB:ServiceUrl"]))
         app.Services.GetRequiredService<IAmazonDynamoDB>());
     await DynamoDbOrderTableInitializer.EnsureTableExistsAsync(
         app.Services.GetRequiredService<IAmazonDynamoDB>());
+}
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<GameService>().InitializeSearchIndexAsync();
 }
 app.Run();
 public partial class Program { } // Para testes de integração

@@ -1,4 +1,5 @@
 ﻿using Fgc.Catalog.Application.DTOS.Games;
+using Fgc.Catalog.Application.Interfaces;
 using Fgc.Catalog.Application.Services;
 using Fgc.Catalog.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
@@ -40,6 +41,44 @@ public class GameController(GameService gameService) : ControllerBase
     {
         var games = await gameService.GetAllAsync();
         return Ok(games);
+    }
+
+    /// <summary>
+    /// Search games by title/category (fuzzy, ordered by relevance). Also exposed as GET /search.
+    /// </summary>
+    [HttpGet("search")]
+    [HttpGet("/search")]
+    public async Task<IActionResult> SearchGames([FromQuery] string? q, [FromQuery] int size = 20)
+    {
+        if (string.IsNullOrWhiteSpace(q))
+            return BadRequest(new { error = "Query parameter 'q' is required." });
+
+        try
+        {
+            return Ok(await gameService.SearchAsync(q, size));
+        }
+        catch (SearchUnavailableException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Search is temporarily unavailable." });
+        }
+    }
+
+    /// <summary>
+    /// Rebuild the search index from the database (only Admin)
+    /// </summary>
+    [HttpPost("reindex")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Reindex()
+    {
+        try
+        {
+            var count = await gameService.ReindexAsync();
+            return Ok(new { indexed = count });
+        }
+        catch (SearchUnavailableException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "Search is temporarily unavailable." });
+        }
     }
 
     /// <summary>

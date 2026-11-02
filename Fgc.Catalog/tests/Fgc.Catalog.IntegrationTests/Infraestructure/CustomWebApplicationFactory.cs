@@ -1,4 +1,5 @@
 ﻿using Fgc.Catalog.Application.Consumers;
+using Fgc.Catalog.Application.DTOS.Games;
 using Fgc.Catalog.Application.Interfaces;
 using Fgc.Catalog.Domain.Entities;
 using Fgc.Catalog.Infrastructure.Persistence;
@@ -47,6 +48,10 @@ namespace Fgc.Catalog.IntegrationTests.Infrastructure
                 services.RemoveAll(typeof(IOrderRepository));
                 services.AddSingleton<IOrderRepository, InMemoryOrderRepository>();
 
+                // Sem OpenSearch real disponível em teste de integração - fake em memória (match por substring).
+                services.RemoveAll(typeof(IGameSearchService));
+                services.AddSingleton<IGameSearchService, InMemoryGameSearchService>();
+
                 // Sem RabbitMQ real disponível em teste de integração - substitui o bus do Program
                 // por um transporte em memória (publicações ficam inspecionáveis via ITestHarness).
                 services.AddMassTransitTestHarness(x =>
@@ -84,5 +89,40 @@ namespace Fgc.Catalog.IntegrationTests.Infrastructure
         // (precisa sobreviver entre requests HTTP dentro do mesmo teste), então não
         // é limpo automaticamente como o DbContext em ResetDatabase().
         public void Clear() => _orders.Clear();
+    }
+
+    internal class InMemoryGameSearchService : IGameSearchService
+    {
+        private readonly Dictionary<Guid, GameResponse> _games = [];
+
+        public Task<bool> EnsureIndexAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+        public Task IndexAsync(GameResponse game, CancellationToken cancellationToken = default)
+        {
+            lock (_games) _games[game.Id] = game;
+            return Task.CompletedTask;
+        }
+
+        public async Task IndexManyAsync(IReadOnlyCollection<GameResponse> games, CancellationToken cancellationToken = default)
+        {
+            foreach (var game in games)
+                await IndexAsync(game, cancellationToken);
+        }
+
+        public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            lock (_games) _games.Remove(id);
+            return Task.CompletedTask;
+        }
+
+        public Task<List<GameResponse>> SearchAsync(string query, int size, CancellationToken cancellationToken = default)
+        {
+            lock (_games)
+                return Task.FromResult(_games.Values
+                    .Where(g => g.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+                             || g.Category.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    .Take(size)
+                    .ToList());
+        }
     }
 }
