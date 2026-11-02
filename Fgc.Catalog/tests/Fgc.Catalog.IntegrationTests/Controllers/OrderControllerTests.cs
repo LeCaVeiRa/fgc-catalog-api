@@ -40,7 +40,7 @@ namespace Fgc.Catalog.IntegrationTests.Controllers
         private static string GenerateToken(Guid userId, string role = "User")
         {
             var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes("FgcUsers-Auth-JWT-Key-2026-Strong-And-Secure"));
+                Encoding.UTF8.GetBytes(CustomWebApplicationFactory<Program>.JwtKey));
 
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

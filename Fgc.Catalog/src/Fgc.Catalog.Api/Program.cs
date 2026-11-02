@@ -12,6 +12,13 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Prometheus;
 var builder = WebApplication.CreateBuilder(args);
+
+// Segredos (chave JWT, credenciais do broker) não têm default: vêm de env/.env (compose) ou Secret (K8s).
+// Ausência derruba a subida com mensagem clara em vez de cair num valor inseguro.
+string RequiredSetting(string key) =>
+    builder.Configuration[key] is { Length: > 0 } value
+        ? value
+        : throw new InvalidOperationException($"Missing configuration '{key}' (env {key.Replace(":", "__")}).");
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -78,7 +85,7 @@ builder.Services.AddAuthentication("Bearer")
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                System.Text.Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
+                System.Text.Encoding.UTF8.GetBytes(RequiredSetting("Jwt:Key"))
             )
         };
     });
@@ -115,8 +122,8 @@ var rabbitHost = builder.Configuration["RabbitMq:Host"] ?? "localhost";
 var rabbitUseSsl = builder.Configuration.GetValue<bool>("RabbitMq:UseSsl");
 var rabbitPort = builder.Configuration.GetValue<int?>("RabbitMq:Port") ?? (rabbitUseSsl ? 5671 : 5672);
 var rabbitVirtualHost = builder.Configuration["RabbitMq:VirtualHost"] ?? "/";
-var rabbitUsername = builder.Configuration["RabbitMq:Username"] ?? "admin";
-var rabbitPassword = builder.Configuration["RabbitMq:Password"] ?? "admin";
+var rabbitUsername = RequiredSetting("RabbitMq:Username");
+var rabbitPassword = RequiredSetting("RabbitMq:Password");
 
 builder.Services.AddMassTransit(x =>
 {

@@ -22,8 +22,15 @@ namespace Fgc.Catalog.IntegrationTests.Infrastructure
         // para o mesmo nome entre providers diferentes).
         private readonly string _databaseName = Guid.NewGuid().ToString();
 
+        public const string JwtKey = "integration-tests-only-signing-key-not-a-secret";
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            // Valores só de teste - em runtime vêm de env/.env (compose) ou Secret (K8s).
+            builder.UseSetting("Jwt:Key", JwtKey);
+            builder.UseSetting("RabbitMq:Username", "test");
+            builder.UseSetting("RabbitMq:Password", "test");
+
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll(typeof(DbContextOptions<CatalogDbContext>));

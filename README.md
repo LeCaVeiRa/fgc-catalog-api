@@ -187,7 +187,7 @@ Acesse: `http://localhost:5070/swagger`.
 
 ## ☸️ Kubernetes
 
-Manifestos em `k8s/` (`deployment.yaml`, `service.yaml`, `configmap.yaml`, `secret.yaml`). Aplicar com `kubectl apply -f k8s/`.
+Manifestos em `k8s/` (`deployment.yaml`, `service.yaml`, `configmap.yaml`, `secret.example.yaml` - só modelo; o Secret real vem do External Secrets). Aplicar com `kubectl apply -f k8s/`.
 
 ---
 

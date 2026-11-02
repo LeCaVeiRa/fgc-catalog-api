@@ -1,0 +1,13 @@
+# Contexto de build enxuto: sem artefatos locais, testes, manifestos nem segredos.
+**/bin/
+**/obj/
+**/TestResults/
+**/tests/
+**/.vs/
+**/*.user
+.git/
+.github/
+k8s/
+*.md
+.env
+.env.*

@@ -41,7 +41,7 @@ namespace Fgc.Catalog.IntegrationTests.Controllers
         private static string GenerateAdminToken()
         {
             var key = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes("FgcUsers-Auth-JWT-Key-2026-Strong-And-Secure")
+                    Encoding.UTF8.GetBytes(CustomWebApplicationFactory<Program>.JwtKey)
                 );
 
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -116,7 +116,7 @@ namespace Fgc.Catalog.IntegrationTests.Controllers
         {
             // Arrange - Token de usuário não admin
             var key = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes("FgcUsers-Auth-JWT-Key-2026-Strong-And-Secure")
+                    Encoding.UTF8.GetBytes(CustomWebApplicationFactory<Program>.JwtKey)
                 );
             var credencials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var claims = new[]
