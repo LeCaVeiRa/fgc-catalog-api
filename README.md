@@ -12,7 +12,8 @@ Arquitetura de microsserviços orientada a eventos, garantindo:
 
 - Autonomia de código e ciclo de vida (repositório isolado)
 - Comunicação assíncrona utilizando Mensageria (**RabbitMQ** / **Amazon MQ** em produção)
-- Persistência de dados isolada (SQLite para `Game`/`User`, DynamoDB para `Order` e log de eventos)
+- Persistência de dados isolada (PostgreSQL para `Game`/`User`, DynamoDB para `Order` e log de eventos)
+- Busca textual tolerante a erros de digitação com **OpenSearch**
 - Cache com **Redis**
 - Containerização com **Docker**
 - Base escalável para orquestração em Kubernetes
@@ -22,7 +23,8 @@ Arquitetura de microsserviços orientada a eventos, garantindo:
 ## 🛠️ Tecnologias Utilizadas
 
 - **.NET 8** / **ASP.NET Core Web API**
-- **Entity Framework Core** + **SQLite**
+- **Entity Framework Core** + **PostgreSQL** (Npgsql; RDS na AWS)
+- **OpenSearch** (`OpenSearch.Client`; busca fuzzy de jogos)
 - **MassTransit** + **RabbitMQ** (Amazon MQ/AMQPS em produção)
 - **Redis** (`IDistributedCache`, cache de `GET /games`)
 - **AWS DynamoDB** (persistência de `Order` e log de eventos de domínio)
@@ -118,6 +120,8 @@ Authorization: Bearer {token}
 * `POST /games` (Admin) — cria jogo.
 * `PUT /games/{id}` (Admin) — atualiza jogo.
 * `DELETE /games/{id}` (Admin) — remove jogo.
+* `GET /games/search?q=` e o alias `GET /search?q=` — busca por título e categoria com `multi_match` e `fuzziness: AUTO`, ordenada por relevância (ex.: `zeld` encontra "Zelda"). Responde 503 se o OpenSearch estiver fora.
+* `POST /games/reindex` (Admin) — reconstrói o índice `games` a partir do banco.
 
 ### `OrderController` (`/orders`)
 * `POST /orders` — cria um pedido de compra (dispara `OrderPlacedEvent`).
@@ -139,9 +143,14 @@ Middleware global de exceções (400/404/500, JSON padronizado); logs estruturad
 
 ## 🗄️ Banco de Dados
 
-* **SQLite** via EF Core para `Game` e `User` (réplica local), com migrations em `Fgc.Catalog.Infrastructure/Migrations`.
+* **PostgreSQL** via EF Core para `Game` e `User` (réplica local), com migrations em `Fgc.Catalog.Infrastructure/Migrations`.
+  * No compose, a API aplica as migrations na subida.
+  * No EKS, quem aplica é o Job `--migrate`.
 * **AWS DynamoDB** para `Order` (tabela `Orders`, sem EF Core) e para o log de eventos de domínio.
-* **Redis** como cache de leitura em `GET /games`.
+* **OpenSearch**, índice `games`:
+  * É uma projeção do banco. Create, Update e Delete atualizam o índice, e uma falha de indexação não desfaz a escrita no banco.
+  * Na subida, um índice recém-criado é populado a partir do banco.
+* **Redis** como cache de `GET /games`, com o mesmo fallback e disjuntor do Users.
 
 ---
 
@@ -158,11 +167,18 @@ Referenciado via NuGet local (`nuget.config` aponta para `./LocalPackages`), ver
 * .NET SDK 8+
 * Docker (para RabbitMQ, via `fgc-orchestration/`)
 
-### Variáveis de Ambiente (`appsettings.json`)
+### Variáveis de Ambiente
 
-* `ConnectionStrings:CatalogDb`
-* `Jwt:Issuer`, `Jwt:Audience`, `Jwt:Key` (mesmos valores da Users API)
-* `RabbitMq:Host`, `RabbitMq:Port`, `RabbitMq:VirtualHost`, `RabbitMq:Username`, `RabbitMq:Password`, `RabbitMq:UseSsl` — é essa a seção efetivamente lida em runtime (o `appsettings.json` também contém uma seção `MassTransit`, que não é usada pelo código).
+Sem valor padrão para segredos: se uma variável obrigatória faltar, a API não sobe e informa qual variável está faltando.
+Localmente os valores vêm do `.env` de `fgc-orchestration` (via docker-compose). No EKS vêm do Secrets Manager, via External Secrets.
+A tabela completa (local × AWS) está em `fgc-orchestration/README.md`.
+
+* `ConnectionStrings__CatalogDb`
+* `Jwt__Key` (obrigatória; mesma chave da Users API), `Jwt__Issuer`, `Jwt__Audience`
+* `RabbitMq__Host`, `RabbitMq__Username`, `RabbitMq__Password` (obrigatórias), `RabbitMq__Port`, `RabbitMq__VirtualHost`, `RabbitMq__UseSsl`
+* `Redis__ConnectionString` (obrigatória)
+* `OpenSearch__Url` (obrigatória). `OpenSearch__Username`/`OpenSearch__Password` são opcionais: vazias no compose e no domínio em VPC da AWS, que é isolado por rede.
+* `AWS__DynamoDB__ServiceUrl` (só local) e `AWS_REGION`
 
 ### Execução via Docker
 
@@ -175,13 +191,23 @@ docker-compose up -d --build
 
 ### Execução Local
 
+Com os serviços do compose rodando e as variáveis acima definidas:
+
 ```bash
-dotnet restore
-dotnet ef database update --project src/Fgc.Catalog.Infrastructure --startup-project src/Fgc.Catalog.Api
-dotnet run --project src/Fgc.Catalog.Api
+dotnet run --project Fgc.Catalog/src/Fgc.Catalog.Api
 ```
 
 Acesse: `http://localhost:5070/swagger`.
+
+---
+
+## 🚀 CI/CD
+
+`.github/workflows/ci-cd.yml`:
+- **Pull request:** build e testes.
+- **Push em `main`:** testes, imagem com tag = SHA, Trivy (CRITICAL), push no ECR, Job de migração e rolling update no EKS.
+
+Detalhes, credenciais e o ciclo da infra estão em `fgc-orchestration/README.md`.
 
 ---
 
