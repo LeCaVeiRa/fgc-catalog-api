@@ -187,7 +187,7 @@ Acesse: `http://localhost:5070/swagger`.
 
 ## ☸️ Kubernetes
 
-Manifestos em `k8s/` (`deployment.yaml`, `service.yaml`, `configmap.yaml`, `secret.example.yaml` - só modelo; o Secret real vem do External Secrets). Aplicar com `kubectl apply -f k8s/`.
+Manifestos kustomize em `k8s/`, aplicados nesta ordem por `fgc-orchestration/scripts/deploy-aws.sh`: `k8s/` (ServiceAccount com EKS Pod Identity, ConfigMap e ExternalSecret do Secrets Manager `fgc/catalog`), `k8s/migrate/` (Job `--migrate`) e `k8s/app/` (Deployment com 2 réplicas e rolling update sem indisponibilidade, Service ClusterIP e ServiceMonitor). A tag da imagem (`DEPLOY_TAG`) é trocada pelo SHA do commit no deploy.
 
 ---
 

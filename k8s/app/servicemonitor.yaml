@@ -1,0 +1,15 @@
+# Scrape de /metrics (prometheus-net) pelo Prometheus do kube-prometheus-stack.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: fgc-catalog-api
+  labels:
+    app: fgc-catalog-api
+spec:
+  selector:
+    matchLabels:
+      app: fgc-catalog-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

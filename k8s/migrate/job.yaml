@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fgc-catalog-api-migrate
+  labels:
+    app: fgc-catalog-api
+    component: migrate
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: fgc-catalog-api
+        component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: fgc-catalog-api
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: migrate
+          image: fgc-catalog-api
+          args: ["--migrate"]
+          envFrom:
+            - configMapRef:
+                name: fgc-catalog-api-config
+            - secretRef:
+                name: fgc-catalog-api-secret
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }

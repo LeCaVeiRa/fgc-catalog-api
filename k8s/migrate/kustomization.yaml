@@ -1,0 +1,11 @@
+# Job de migração (Program --migrate): conclui antes do rollout de app/.
+# Jobs são imutáveis - o deploy apaga o anterior antes de aplicar.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: fgc
+resources:
+  - job.yaml
+images:
+  - name: fgc-catalog-api
+    newName: 018157123503.dkr.ecr.us-east-2.amazonaws.com/fgc-catalog-api
+    newTag: DEPLOY_TAG # substituído pelo deploy (SHA do commit)

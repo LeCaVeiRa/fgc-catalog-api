@@ -1,16 +1,19 @@
+# Só valores estáticos. Segredos e endpoints que mudam a cada `terraform apply` (host do broker,
+# banco, Redis, OpenSearch) vêm do Secret fgc-catalog-api-secret (ExternalSecret <- Secrets Manager fgc/catalog).
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: fgc-catalog-api-config
-  labels:
-    app: fgc-catalog-api
 data:
-  # Endpoint AMQPS do Amazon MQ (saída BrokerAmqpEndpoint do template.yaml em
-  # fgc-notifications-lambda) - substitui o RabbitMq__Host="rabbitmq" usado no docker-compose local.
-  RabbitMq__Host: "fgc-notifications-broker.mq.us-east-1.amazonaws.com"
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:8080"
+  # TLS termina no ALB; honra X-Forwarded-* vindos do ALB/Kong.
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+  AWS_REGION: "us-east-2"
   RabbitMq__Port: "5671"
   RabbitMq__VirtualHost: "/"
   RabbitMq__UseSsl: "true"
   Jwt__Issuer: "Fgc.UsersAPI"
   Jwt__Audience: "Fgc.CatalogAPI"
-  Redis__ConnectionString: "redis:6379"
+  # Migrations rodam no Job k8s/migrate (antes do rollout), não na subida dos pods.
+  Database__MigrateOnStartup: "false"

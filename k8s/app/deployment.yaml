@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fgc-catalog-api
+  labels:
+    app: fgc-catalog-api
+spec:
+  replicas: 2
+  # Zero downtime: sobe um pod novo, espera ficar Ready, só então derruba um antigo.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: fgc-catalog-api
+  template:
+    metadata:
+      labels:
+        app: fgc-catalog-api
+    spec:
+      serviceAccountName: fgc-catalog-api
+      securityContext:
+        runAsNonRoot: true
+      # Espalha as réplicas entre os nós (perder um nó não derruba o serviço).
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: fgc-catalog-api
+      containers:
+        - name: fgc-catalog-api
+          image: fgc-catalog-api
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: fgc-catalog-api-config
+            - secretRef:
+                name: fgc-catalog-api-secret
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          # Continua atendendo enquanto o kube-proxy/Kong param de enviar tráfego ao pod.
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }
+          startupProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 3
+            failureThreshold: 40
+          # Ready = banco e broker ok (Redis/DynamoDB só degradam - ver HealthCheckExtensions).
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3

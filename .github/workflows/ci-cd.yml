@@ -1,0 +1,133 @@
+# CI/CD de fgc-catalog-api.
+# - pull_request: build + testes.
+# - push em main: testes -> imagem (tag = SHA) -> Trivy -> push ECR -> Job de migração -> rolling update no EKS.
+# Credenciais: usuário IAM fgc-ci (OIDC provider é negado pelo SCP da conta Free plan), chave em
+# GitHub Secrets AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY; permissões mínimas em fgc-infra/base e
+# access entry com Edit só no namespace fgc (fgc-infra/env/eks.tf).
+name: ci-cd
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  AWS_REGION: us-east-2
+  EKS_CLUSTER: fgc
+  K8S_NAMESPACE: fgc
+  APP: fgc-catalog-api
+  SOLUTION: Fgc.Catalog/Fgc.Catalog.slnx
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # 8.0: runtime dos projetos; 10.0: SDK com suporte a .slnx.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore "$SOLUTION"
+
+      - name: Build
+        run: dotnet build "$SOLUTION" --no-restore -c Release
+
+      # Sem broker/Redis/DynamoDB/OpenSearch reais: os testes de integração usam fakes em memória.
+      - name: Test
+        run: dotnet test "$SOLUTION" --no-build -c Release --logger trx --results-directory TestResults
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results
+          path: TestResults
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - name: Build da imagem
+        id: image
+        run: |
+          image="${{ steps.ecr.outputs.registry }}/$APP:${{ github.sha }}"
+          echo "ref=$image" >> "$GITHUB_OUTPUT"
+          docker build -t "$image" .
+
+      # Falha o pipeline com vulnerabilidade CRITICAL que já tenha correção disponível.
+      - name: Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      # Repositórios ECR são imutáveis: re-execução do mesmo commit reaproveita a imagem.
+      - name: Push ECR
+        run: |
+          if aws ecr describe-images --repository-name "$APP" --image-ids imageTag="${{ github.sha }}" >/dev/null 2>&1; then
+            echo "Imagem já publicada"
+          else
+            docker push "${{ steps.image.outputs.ref }}"
+          fi
+
+      # A infra é efêmera (apply/destroy por sessão): sem cluster, publica a imagem e pula o deploy.
+      - name: Cluster disponível?
+        id: cluster
+        run: |
+          if aws eks describe-cluster --name "$EKS_CLUSTER" >/dev/null 2>&1; then
+            aws eks update-kubeconfig --name "$EKS_CLUSTER"
+            echo "up=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Cluster $EKS_CLUSTER não existe - deploy ignorado (imagem publicada no ECR)."
+            echo "up=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Schema antes do rollout: pods novos nunca sobem contra um banco sem as migrations.
+      - name: Job de migração
+        if: steps.cluster.outputs.up == 'true'
+        run: |
+          kubectl -n "$K8S_NAMESPACE" delete job "$APP-migrate" --ignore-not-found
+          kubectl kustomize k8s/migrate | sed "s|image: .*/$APP:DEPLOY_TAG|image: ${{ steps.image.outputs.ref }}|" | kubectl apply -f -
+          if ! kubectl -n "$K8S_NAMESPACE" wait "job/$APP-migrate" --for=condition=complete --timeout=300s; then
+            kubectl -n "$K8S_NAMESPACE" logs "job/$APP-migrate" --tail=100 || true
+            exit 1
+          fi
+
+      # maxUnavailable 0 / maxSurge 1 + readiness probe: pods antigos só saem quando os novos estão prontos.
+      - name: Rolling update
+        if: steps.cluster.outputs.up == 'true'
+        run: |
+          kubectl -n "$K8S_NAMESPACE" set image "deployment/$APP" "$APP=${{ steps.image.outputs.ref }}"
+          if ! kubectl -n "$K8S_NAMESPACE" rollout status "deployment/$APP" --timeout=300s; then
+            kubectl -n "$K8S_NAMESPACE" rollout undo "deployment/$APP"
+            exit 1
+          fi

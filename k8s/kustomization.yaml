@@ -1,0 +1,12 @@
+# Configuração do fgc-catalog-api no EKS. Ordem de deploy: k8s/ -> k8s/migrate/ -> k8s/app/
+# (ver fgc-orchestration/scripts/deploy-aws.sh).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: fgc
+labels:
+  - pairs:
+      app: fgc-catalog-api
+resources:
+  - serviceaccount.yaml
+  - configmap.yaml
+  - externalsecret.yaml

@@ -7,7 +7,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 namespace Fgc.Catalog.Api.HealthChecks
 {
     // /health/live: o processo responde (sem dependências) - usado como liveness probe.
-    // /health/ready: banco, Redis, DynamoDB e broker (check do MassTransit, tag "ready") - readiness probe.
+    // /health/ready: banco e broker (check do MassTransit, tag "ready") decidem a readiness; Redis e
+    // DynamoDB (log de eventos) só degradam - Degraded responde 200, então a falha deles não tira os
+    // pods do balanceamento (o cache já cai para o banco e o log de eventos é acessório).
     // /health: alias de live, mantido por compatibilidade com o compose e o Kong.
     public static class HealthCheckExtensions
     {
@@ -17,11 +19,11 @@ namespace Fgc.Catalog.Api.HealthChecks
         {
             services.AddHealthChecks()
                 .AddCheck<DatabaseHealthCheck>("database", tags: [ReadyTag])
-                .AddCheck<RedisCacheHealthCheck>("redis", tags: [ReadyTag])
+                .AddCheck<RedisCacheHealthCheck>("redis", failureStatus: HealthStatus.Degraded, tags: [ReadyTag])
                 .Add(new HealthCheckRegistration(
                     "dynamodb",
                     sp => new DynamoDbHealthCheck(sp.GetRequiredService<IAmazonDynamoDB>(), dynamoDbTables),
-                    failureStatus: null,
+                    failureStatus: HealthStatus.Degraded,
                     tags: [ReadyTag]));
             return services;
         }

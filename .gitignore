@@ -365,3 +365,6 @@ FodyWeavers.xsd
 .env
 .env.*
 !.env.example
+
+# Pacote compartilhado Fgc.MessageContracts (feed local do nuget.config) - necessário no CI e no docker build
+!LocalPackages/*.nupkg
